@@ -10,7 +10,7 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-
+	//test
 	BITMAPINFOHEADER bitmapInfoHeader;
 	RGBTRIPLE *pixelmap;
 	RGBTRIPLE **pixelmap2;
