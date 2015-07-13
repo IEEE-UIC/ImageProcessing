@@ -61,19 +61,25 @@ typedef struct tagRGBTRIPLE
     uint8_t  rgbtRed;
     uint8_t  rgbtBlue;
     uint8_t  rgbtGreen;
+    uint8_t  a;
+
 }RGBTRIPLE;
 #pragma pack(pop)
+
+struct BW
+{
+    uint8_t BW;
+};
 
 RGBTRIPLE *LoadBitmapFile(char *filename, BITMAPINFOHEADER *bitmapInfoHeader)
 {
     FILE *filePtr; //our file pointer
     BITMAPFILEHEADER bitmapFileHeader; //our bitmap file header
-    RGBTRIPLE *RGBbitmap;
 
-    unsigned char *bitmapImage;  //store image data
+    RGBTRIPLE *bitmapImage;  //store image data
 
     int imageIdx=0;  //image index counter
-    unsigned char tempRGB;  //our swap variable
+    RGBTRIPLE tempRGB;  //our swap variable
 
 
     //open filename in read binary mode
@@ -93,13 +99,61 @@ RGBTRIPLE *LoadBitmapFile(char *filename, BITMAPINFOHEADER *bitmapInfoHeader)
 
     //read the bitmap info header
     fread(bitmapInfoHeader, sizeof(BITMAPINFOHEADER),1,filePtr);
+//    fseek(filePtr, bitmapFileHeader.bOffBits, SEEK_SET);
 
-    //move file point to the begging of bitmap data
-    fseek(filePtr, bitmapFileHeader.bOffBits, SEEK_SET);
+    int imageSize = bitmapInfoHeader->biHeight * bitmapInfoHeader->biWidth;
 
-    //allocate enough memory for the bitmap image data
+	bitmapImage = (RGBTRIPLE*)malloc(imageSize * sizeof(RGBTRIPLE));
 
-    bitmapImage = (unsigned char*)malloc(bitmapInfoHeader->biSizeImage);
+
+    if(bitmapInfoHeader->biBitCount == 32)
+    {
+    	fread(bitmapImage,sizeof(RGBTRIPLE),imageSize,filePtr);
+
+    }
+    else if(bitmapInfoHeader->biBitCount == 24)
+    {
+    	//Allocate space for the read operation
+
+    	int Pitch = bitmapInfoHeader->biWidth * 3;
+    	int ExcessPitch = 0;
+    	while(double(Pitch / 4) != double(Pitch) / 4.0)
+    	{
+    		Pitch++;
+    		ExcessPitch++;
+    	}
+
+
+    	//unsigned char *DataStore = new unsigned char[Pitch*bitmapInfoHeader->biHeight];
+    	char *DataStore = (char*)malloc(Pitch*bitmapInfoHeader->biHeight);
+    	fread(DataStore, 1, Pitch*bitmapInfoHeader->biHeight, filePtr);
+
+    	int CurDataPos = 0;
+    	for(int i=0 ;i < bitmapInfoHeader->biHeight;i++)
+    	{
+    		for(int j=0; j < bitmapInfoHeader->biWidth;j++)
+    		{
+    			RGBTRIPLE color;
+    			color.rgbtRed   = DataStore[CurDataPos++];
+    			color.rgbtBlue  = DataStore[CurDataPos++];
+    			color.rgbtGreen = DataStore[CurDataPos++];
+    			color.a = 0;
+    			bitmapImage[i* bitmapInfoHeader->biWidth +j] = color;
+
+    		}
+    		CurDataPos += ExcessPitch;
+    	}
+
+    	free(DataStore);
+    }
+
+//    int px = 0;
+//    for (imageIdx = 0;imageIdx < imageSize;imageIdx+=4)
+//    {
+//        tempRGB = bitmapImage[imageIdx];
+//        bitmapImage[imageIdx] = bitmapImage[imageIdx + 2];
+//        bitmapImage[imageIdx + 2] = tempRGB;
+//    }
 
 
 
@@ -111,50 +165,9 @@ RGBTRIPLE *LoadBitmapFile(char *filename, BITMAPINFOHEADER *bitmapInfoHeader)
         return NULL;
     }
 
-    //read in the bitmap image data
-    //will read the
-    fread(bitmapImage,bitmapInfoHeader->biSizeImage,1,filePtr);
-
-//    int count = 0;
-//    count = fread(bitmapImage,sizeof(RGBTRIPLE),bitmapInfoHeader->biSizeImage/sizeof(RGBTRIPLE),filePtr);
-//    cout<<"Count: "<< count << endl;
-
-    //make sure bitmap image data was read
-    if (bitmapImage == NULL)
-    {
-        fclose(filePtr);
-        return NULL;
-    }
-
-    //swap the r and b values to get RGB (bitmap is BGR)
-    for (imageIdx = 0;imageIdx < bitmapInfoHeader->biSizeImage;imageIdx+=3)
-    {
-        tempRGB = bitmapImage[imageIdx];
-        bitmapImage[imageIdx] = bitmapImage[imageIdx + 2];
-        bitmapImage[imageIdx + 2] = tempRGB;
-    }
-
-    RGBbitmap = (RGBTRIPLE*)malloc(bitmapInfoHeader->biSizeImage * sizeof(RGBTRIPLE));
-    RGBTRIPLE temp;
-    int px = 0;
-
-    //This needs to be investigated I believe there may be a cascading problem here
-    //may be caused from width or length not being divisible by 4
-    //can be fixed with padding
-    for (imageIdx = 0;imageIdx < bitmapInfoHeader->biSizeImage;imageIdx+=3)
-    {
-    	temp.rgbtRed = bitmapImage[imageIdx];
-    	temp.rgbtBlue = bitmapImage[imageIdx + 1];
-    	temp.rgbtGreen = bitmapImage[imageIdx + 2];
-    	RGBbitmap[px++] = temp;
-
-    }
 
 
-    //close file and return bitmap iamge data
-    fclose(filePtr);
-    free(bitmapImage);
-    return RGBbitmap;
+    return bitmapImage;
 }
 
 void PrintHeaderInfo(BITMAPINFOHEADER *bitmapInfoHeader)

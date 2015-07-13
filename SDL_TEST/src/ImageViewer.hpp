@@ -20,7 +20,7 @@ using namespace std;
 //Screen attributes
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
-const int SCREEN_BPP = 8;
+const int SCREEN_BPP = 32;
 
 SDL_Surface* init()
 {
@@ -87,7 +87,32 @@ void putpixel(SDL_Surface *surface, int x, int y, Uint32 pixel)
     int bpp = surface->format->BytesPerPixel;
     /* Here p is the address to the pixel we want to set */
     Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
-    *p = pixel;
+
+    switch(bpp) {
+    case 1:
+        *p = pixel;
+        break;
+
+    case 2:
+        *(Uint16 *)p = pixel;
+        break;
+
+    case 3:
+        if(SDL_BYTEORDER == SDL_BIG_ENDIAN) {
+            p[0] = (pixel >> 16) & 0xff;
+            p[1] = (pixel >> 8) & 0xff;
+            p[2] = pixel & 0xff;
+        } else {
+            p[0] = pixel & 0xff;
+            p[1] = (pixel >> 8) & 0xff;
+            p[2] = (pixel >> 16) & 0xff;
+        }
+        break;
+
+    case 4:
+        *(Uint32 *)p = pixel;
+        break;
+    }
 
 }
 
@@ -124,13 +149,14 @@ void test_pixel_display(SDL_Surface*& screen)
 
 }
 
-void display(SDL_Surface*& screen,RGBTRIPLE **rgb)
+void double_buf_display(SDL_Surface*& screen,RGBTRIPLE **rgb)
 {
 
 
     /* Code to set a yellow pixel at the center of the screen */
 
     int x, y;
+    int ofs;
     Uint32 color;
 
     if ( SDL_LockSurface(screen) < 0 ) {
@@ -138,11 +164,45 @@ void display(SDL_Surface*& screen,RGBTRIPLE **rgb)
     	exit(-1);
     }
 
-    for (int i = 0; i < ROWS; i++)
+	for (int y = COLS-1; y >= 0;--y)
+	{
+		for (int x = 0; x < ROWS; ++x)
+		{
+    		color = SDL_MapRGB(screen->format, rgb[x][y].rgbtRed, rgb[x][y].rgbtBlue, rgb[x][y].rgbtGreen);
+    		putpixel(screen, x, y, color);
+
+    	}
+    }
+
+    SDL_FreeSurface(screen);
+    SDL_Flip(screen);
+
+
+}
+
+void buf_display(SDL_Surface*& screen,RGBTRIPLE *rgb)
+{
+
+
+    /* Code to set a yellow pixel at the center of the screen */
+
+    int x, y;
+    int ofs;
+    Uint32 color;
+
+    if ( SDL_LockSurface(screen) < 0 ) {
+    	fprintf(stderr, "Can't lock screen: %s\n", SDL_GetError());
+    	exit(-1);
+    }
+
+    for (int i = 0; i < COLS; i++)
     {
-    	for (int j = 0; j < COLS; j++)
+    	for (int j = 0; j < ROWS; j++)
     	{
-    		color = SDL_MapRGB(screen->format, rgb[i][j].rgbtRed, rgb[i][j].rgbtGreen, rgb[i][j].rgbtBlue);
+    		ofs = (i * ROWS) + j;
+    		//color = SDL_MapRGB(screen->format, rgb[i][j].rgbtRed, rgb[i][j].rgbtGreen, rgb[i][j].rgbtBlue);
+    		color = SDL_MapRGB(screen->format, rgb[ofs].rgbtRed, rgb[ofs].rgbtGreen, rgb[ofs].rgbtBlue);
+
     		putpixel(screen, i, j, color);
 
     	}

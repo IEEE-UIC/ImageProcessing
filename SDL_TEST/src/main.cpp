@@ -20,46 +20,34 @@ int main( int argc, char* argv[] )
 	SDL_Surface *screen;
 	SDL_Event event;
 
-//	BITMAPINFOHEADER bitmapInfoHeader1;
+	BITMAPINFOHEADER bitmapInfoHeader1;
 	BITMAPINFOHEADER bitmapInfoHeader2;
-//	RGBTRIPLE *background_buf;
+
+	RGBTRIPLE *background_buf;
 	RGBTRIPLE *object_buf;
 
-//	RGBTRIPLE **background_map;
+	RGBTRIPLE **background_map;
 	RGBTRIPLE **object_map;
-//	RGBTRIPLE **delta_frame;
+	RGBTRIPLE **delta_frame;
 
 
-//	background_buf = LoadBitmapFile(argv[1],&bitmapInfoHeader1);
+	background_buf = LoadBitmapFile(argv[1],&bitmapInfoHeader1);
+	object_buf 	= LoadBitmapFile(argv[2],&bitmapInfoHeader2);
 
-	object_buf 	= LoadBitmapFile(argv[1],&bitmapInfoHeader2);
-	setDimensions(&bitmapInfoHeader2);
-//  FindMedian(object_buf);
-//
-//	sobel_printf(object_map);
+	setDimensions(&bitmapInfoHeader1);
 
-//	background_map = ConvertTo2D(background_buf);
-//	background_map = ToGrayScale(background_map);
+	background_map = ConvertTo2D(background_buf);
+	background_map = ToGrayScale(background_map);
 
 	object_map = ConvertTo2D(object_buf);
 	object_map = ToGrayScale(object_map);
-//
+
 	screen = init();
 
-//	delta_frame = DeltaFrameGeneration(background_map,object_map);
-	display(screen,object_map);
+	delta_frame = DeltaFrameGeneration(background_map,object_map);
+	delta_frame = MedianFilter(delta_frame);
 
-	//display_bmp(argv[1],screen);
-	//test_pixel_display(screen);
-
-
-
-
-
-
-
-
-
+	double_buf_display(screen,delta_frame);
 
 
 

@@ -39,9 +39,19 @@ void setDimensions(BITMAPINFOHEADER *bitmapInfoHeader)
 inline RGBTRIPLE** alloc2D(int row,int col)
 {
 	RGBTRIPLE **multi_dim;
-	multi_dim = (RGBTRIPLE**)malloc(col * row *sizeof(RGBTRIPLE));
+	multi_dim = (RGBTRIPLE**)malloc(row * col * sizeof(RGBTRIPLE));
 	for (int k = 0; k < row; k++)
-		multi_dim[k] = (RGBTRIPLE*)malloc(row * sizeof(RGBTRIPLE));
+		multi_dim[k] = (RGBTRIPLE*)malloc(col * sizeof(RGBTRIPLE));
+
+
+	return multi_dim;
+}
+inline BW** alloc2Dgray(int row,int col)
+{
+	BW **multi_dim;
+	multi_dim = (BW**)malloc(row * col * sizeof(BW));
+	for (int k = 0; k < row; k++)
+		multi_dim[k] = (BW*)malloc(col * sizeof(BW));
 
 
 	return multi_dim;
@@ -150,46 +160,14 @@ inline RGBTRIPLE** DeltaFrameGeneration(RGBTRIPLE** in1, RGBTRIPLE** in2)
 	RGBTRIPLE **seg;
 	seg = alloc2D(ROWS,COLS);
 
-	RGBTRIPLE **seg1;
-	seg1 = alloc2D(ROWS,COLS);
-
-	for (int i = 0; i < ROWS; i++)
+	for (int y = COLS-1; y >= 0;--y)
 	{
-		for (int j = 0; j < COLS; j++)
+		for (int x = 0; x < ROWS; ++x)
 		{
 			//double check this shit
-			seg[i][j].rgbtRed = in1[i][j].rgbtRed - in2[i][j].rgbtRed;
-			seg[i][j].rgbtGreen = in1[i][j].rgbtGreen - in2[i][j].rgbtGreen;
-			seg[i][j].rgbtBlue = in1[i][j].rgbtBlue - in2[i][j].rgbtBlue;
-
-			if(seg[i][j].rgbtRed > 20 && seg[i][j].rgbtGreen > 20 && seg[i][j].rgbtBlue > 20)
-			{
-
-				seg1[i][j].rgbtRed = 255;
-				seg1[i][j].rgbtBlue = 255;
-				seg1[i][j].rgbtGreen = 255;
-
-				/*
-				 * After gray scale conversion on both images we take the difference of the images
-				 * and purify the image of the constants.
-				 *
-				 */
-
-//				if(seg[i][j].rgbtRed > 20)
-//					seg1[i][j].rgbtRed = 255;
-//				if (seg[i][j].rgbtGreen > 20)
-//					seg1[i][j].rgbtGreen = 255;
-//				if(seg[i][j].rgbtBlue > 20)
-//					seg1[i][j].rgbtBlue = 255;
-			}
-			else
-			{
-				seg1[i][j].rgbtRed = 0;
-				seg1[i][j].rgbtBlue = 0;
-				seg1[i][j].rgbtGreen = 0;
-
-			}
-
+			seg[x][y].rgbtRed = abs(in1[x][y].rgbtRed - in2[x][y].rgbtRed);
+			seg[x][y].rgbtGreen = abs(in1[x][y].rgbtGreen - in2[x][y].rgbtGreen);
+			seg[x][y].rgbtBlue = abs(in1[x][y].rgbtBlue - in2[x][y].rgbtBlue);
 		}
 	}
 
@@ -197,33 +175,11 @@ inline RGBTRIPLE** DeltaFrameGeneration(RGBTRIPLE** in1, RGBTRIPLE** in2)
 	 * swap ack later
 	 */
 
-	free(seg);
-	return seg1;
+	free(in1);
+	free(in2);
+	return seg;
 }
 
-inline char **MedianFilter(char **seg)
-{
-//
-//	int bbr = 0;
-//	char **firstfilter;
-//	firstfilter = (char**)malloc(sizeof(char *) * ROWS);
-//	for (int k = 0; k < ROWS; k++)
-//		firstfilter[k] = (char*)malloc(sizeof(char) * COLS);
-//
-//	for (int i = 0; i < ROWS; i++)
-//	{
-//		for (int j = 0; j < COLS; j++)
-//		{
-//			if( i != 0 || j != 0 || i != ROWS || j != COLS )
-//				bbr = FindMedian(seg);
-//			firstfilter[i][j] = bbr;
-//		}
-//	}
-//
-//	free(seg);
-//	return firstfilter;
-
-}
 
 inline RGBTRIPLE **Thresholding(RGBTRIPLE **filter)
 {
@@ -358,39 +314,39 @@ inline RGBTRIPLE** ToGrayScale(RGBTRIPLE **rgbmap)
 	RGBTRIPLE **graymap;
 	graymap = alloc2D(ROWS,COLS);
 
-	for (int i = 0; i < ROWS; i++)
+	for (int y = COLS-1; y >= 0;--y)
 	{
-		for (int j = 0; j < COLS; j++)
+		for (int x = 0; x < ROWS; ++x)
 		{
 
-			L = 0.2126 * rgbmap[i][j].rgbtRed + 0.7152 * rgbmap[i][j].rgbtGreen + 0.0722 * rgbmap[i][j].rgbtBlue;
+			L = 0.2126 * rgbmap[x][y].rgbtRed + 0.7152 * rgbmap[x][y].rgbtGreen + 0.0722 * rgbmap[x][y].rgbtBlue;
 
-			graymap[i][j].rgbtRed = (unsigned char)(L+0.5);
-			graymap[i][j].rgbtGreen = (unsigned char)(L+0.5);
-			graymap[i][j].rgbtBlue = (unsigned char)(L+0.5);
+			graymap[x][y].rgbtRed = (unsigned char)(L+0.5);
+			graymap[x][y].rgbtGreen = (unsigned char)(L+0.5);
+			graymap[x][y].rgbtBlue = (unsigned char)(L+0.5);
 		}
 	}
+
 	return graymap;
 }
 
 inline RGBTRIPLE** ConvertTo2D(RGBTRIPLE *rgbmap)
 {
-//	int ofs = 0;
-//	RGBTRIPLE temp;
+
 	RGBTRIPLE **multi_dim;
 	multi_dim = alloc2D(ROWS,COLS);
 
 	int px = 0;
-	for (int i = 0; i < ROWS; i++)
+	for (int y = COLS-1; y >= 0;--y)
 	{
-		for (int j = 0; j < COLS; j++)
+		for (int x = 0; x < ROWS; ++x)
 		{
 
 			//ofs = (j * ROWS) + i;
 
-			multi_dim[i][j].rgbtRed = rgbmap[px].rgbtRed;
-			multi_dim[i][j].rgbtBlue = rgbmap[px].rgbtBlue;
-			multi_dim[i][j].rgbtGreen = rgbmap[px].rgbtGreen;
+			multi_dim[x][y].rgbtRed = rgbmap[px].rgbtRed;
+			multi_dim[x][y].rgbtBlue = rgbmap[px].rgbtBlue;
+			multi_dim[x][y].rgbtGreen = rgbmap[px].rgbtGreen;
 			px++;
 		}
 	}
@@ -416,82 +372,92 @@ inline void sobel_printf(RGBTRIPLE ** rgbmap){
 
 }
 
-inline void FindMedian(RGBTRIPLE *buff)
+inline float FindMedian(RGBTRIPLE **buff,int i,int j)
 {
 
-	/*
-	 * ToDo How to find median with pixels?
-	 *
-	 *
-	 */
+    float med;
+    int tmp;
 
-	char tmp = 0;
-	int cp  = 0;
-	int count = -1;
-	char ch = 0;
-	int ofs = 0;
+    RGBTRIPLE *values;
+    values = (RGBTRIPLE*)malloc(sizeof(RGBTRIPLE)*8);
 
-	RGBTRIPLE** frame;
-	RGBTRIPLE* middle_pixel;
-	RGBTRIPLE* pntr;
+    values[0].rgbtRed = buff[i - 1][j - 1].rgbtRed;
+    values[1].rgbtRed = buff[i][j - 1].rgbtRed;
+    values[2].rgbtRed = buff[i + 1][j].rgbtRed;
+    values[3].rgbtRed = buff[i - 1][j].rgbtRed;
+    values[4].rgbtRed = buff[i + 1][j].rgbtRed;
+    values[5].rgbtRed = buff[i - 1][j + 1].rgbtRed;
+    values[6].rgbtRed = buff[i][j + 1].rgbtRed;
+    values[7].rgbtRed = buff[i + 1][j + 1].rgbtRed;
 
-
-	RGBTRIPLE* tbuff;
-	tbuff = (RGBTRIPLE*)malloc(sizeof(RGBTRIPLE) * 8);
-
-	pntr = buff;
-
-
-	for(int index = 0; index < 9; index+=3)
+	for(int i = 0; i < 8; i++)
 	{
+		for(int j = 0; j < 8 - i; j++)
+		{
+			if(values[j].rgbtRed > values[j+1].rgbtRed)
+			{
+				tmp = values[j].rgbtRed;
+				values[j].rgbtRed = values[j+1].rgbtRed;
+				values[j+1].rgbtRed = tmp;
+			}
+		}
+	}
 
-		tbuff[index] = pntr[count++];
-		tbuff[index+1] = pntr[count++];
-		tbuff[index+2] = pntr[count++];
+	med = (values[3].rgbtRed + values[4].rgbtRed)/2.0;
 
-		cout << (unsigned int)tbuff[index].rgbtRed << endl;
-		cout << (unsigned int)tbuff[index+1].rgbtRed << endl;
-		cout << (unsigned int)tbuff[index+2].rgbtRed << endl;
-		cout<<"counter: "<< count <<endl;
-
-		pntr = &buff[ROWS-2];
-		count = -1;
-
+	free(values);
+    return med;
 
 	}
 
+inline RGBTRIPLE **MedianFilter(RGBTRIPLE **delFrame)
+{
 
-	cout<<"sizeof tbuff: "<< sizeof(tbuff) << endl;
-	for(int i = 0; i < 10;i++)
-		printf("[%d] R:%d , G:%d , B:%d\n",i,tbuff[i].rgbtRed,tbuff[i].rgbtGreen,tbuff[i].rgbtBlue);
+	RGBTRIPLE **temp;
+	temp = alloc2D(ROWS,COLS);
 
-
-
-	middle_pixel = &tbuff[5];
-
-	//ascending order sorting
-//	for(int i = 0; i < 3; i++)
-//	{
-//		for(int j = 0; j < 3 - i; j++)
-//		{
-//			if(tbuff[j] > tbuff[j+1])
-//			{
-//				tmp = tbuff[j];
-//				tbuff[j] = tbuff[j+1];
-//				tbuff[j+1] = tmp;
-//			}
-//		}
-//	}
-
-	middle_pixel->rgbtRed = (tbuff[4].rgbtRed + tbuff[5].rgbtRed)/2;
-	middle_pixel->rgbtGreen = (tbuff[4].rgbtGreen + tbuff[5].rgbtGreen)/2;
-	middle_pixel->rgbtBlue = (tbuff[4].rgbtBlue + tbuff[5].rgbtBlue)/2;
+	for (int y = COLS-1; y >= 0;--y)
+	{
+		for (int x = 0; x < ROWS; ++x)
+		{
+			if (x > 0 &&
+				x < (ROWS - 1) &&
+				y > 0 &&
+				y < (COLS - 1))
+			{
+				temp[x][y].rgbtRed = (uint8_t)FindMedian(delFrame, x, y);
+				temp[x][y].rgbtGreen = (uint8_t)FindMedian(delFrame, x, y);
+				temp[x][y].rgbtBlue = (uint8_t)FindMedian(delFrame, x, y);
 
 
+			}
+			else
+			{
+					temp[x][y].rgbtRed = delFrame[x][y].rgbtRed;
+					temp[x][y].rgbtGreen = delFrame[x][y].rgbtGreen;
+					temp[x][y].rgbtBlue = delFrame[x][y].rgbtBlue;
+			}
 
-	free(tbuff);
+		}
+	}
+	for (int y = COLS-1; y >= 0;--y)
+	{
+		for (int x = 0; x < ROWS; ++x)
+		{
 
-	//return middle_pixel;
+            delFrame[x][y].rgbtRed = temp[x][y].rgbtRed;
+            delFrame[x][y].rgbtGreen = temp[x][y].rgbtGreen;
+            delFrame[x][y].rgbtBlue = temp[x][y].rgbtBlue;
+
+
+		}
+	}
+
+	free(temp);
+	return delFrame;
+
 }
+
+
 
 #endif /* SOBLETRYING_HPP_ */
