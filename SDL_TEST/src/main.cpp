@@ -45,6 +45,7 @@ int main( int argc, char* argv[] )
 	screen = init();
 
 	delta_frame = DeltaFrameGeneration(background_map,object_map);
+	delta_frame = DeltaThresh(delta_frame);
 	delta_frame = MedianFilter(delta_frame);
 
 	double_buf_display(screen,delta_frame);

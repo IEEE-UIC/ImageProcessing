@@ -181,27 +181,53 @@ inline RGBTRIPLE** DeltaFrameGeneration(RGBTRIPLE** in1, RGBTRIPLE** in2)
 }
 
 
-inline RGBTRIPLE **Thresholding(RGBTRIPLE **filter)
+inline RGBTRIPLE **DeltaThresh(RGBTRIPLE **delFrame)
 {
-	//Example of Gray Level Thresholding
+    int threshold    = rand() % 256;
+    float sumObjPix  = 0;
+    int numObjPix    = 0;
+    float sumBacPix  = 0;
+    int numBacPix    = 0;
+    float meanObjPix = 0;
+    float meanBacPix = 0;
 
-//
-//	RGBTRIPLE **ObjectPixels;
-//	ObjectPixels = alloc2D(ROWS,COLS);
-//
-//	for (int i = 0; i < ROWS; i++)
-//	{
-//		for (int j = 0; j < COLS; j++)
-//		{
-//			if(filter[i][j] > 40)//mean or median value
-//				filter[i][j] = 255;
-//			else
-//				filter[i][j] = 0;
-//
-//			EdgeImage[i][j] = 255;
-//		}
-//	}
-//	return EdgeImage;
+	for (int y = COLS-1; y >= 0;--y)
+	{
+		for (int x = 0; x < ROWS; ++x)
+		{
+			if (delFrame[x][y].rgbtRed > threshold)
+            {
+                sumObjPix = sumObjPix + delFrame[x][y].rgbtRed;
+                numObjPix = numObjPix + 1;
+            }
+            else
+            {
+                sumBacPix = sumBacPix + delFrame[x][y].rgbtRed;
+                numBacPix = numBacPix + 1;
+            }
+        }
+    }
+
+    meanObjPix = sumObjPix/numObjPix;
+    meanBacPix = sumBacPix/numBacPix;
+
+    threshold = (meanObjPix + meanBacPix)/2;
+
+	for (int y = COLS-1; y >= 0;--y)
+	{
+		for (int x = 0; x < ROWS; ++x)
+		{
+            if (delFrame[x][y].rgbtRed > threshold)
+            {
+                delFrame[x][y].rgbtRed = 255;
+            }
+            else
+            {
+                delFrame[x][y].rgbtRed = 0;
+            }
+        }
+    }
+	return delFrame;
 }
 
 inline char **EdgeDetection(char **filter)
@@ -425,6 +451,9 @@ inline RGBTRIPLE **MedianFilter(RGBTRIPLE **delFrame)
 				y > 0 &&
 				y < (COLS - 1))
 			{
+				/*
+				 * replace RGB with medians of Red i.e Red is the new Black&White :P
+				 */
 				temp[x][y].rgbtRed = (uint8_t)FindMedian(delFrame, x, y);
 				temp[x][y].rgbtGreen = (uint8_t)FindMedian(delFrame, x, y);
 				temp[x][y].rgbtBlue = (uint8_t)FindMedian(delFrame, x, y);
