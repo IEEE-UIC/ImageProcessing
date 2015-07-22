@@ -1,0 +1,15 @@
+
+Created the PixelStreamServer
+
+-Request images every 4sec from the Camera.
+-- Tested for 20min without any issues
+-- Will try and lower the image updates from 4sec to 1sec (maybe less) 
+
+-Each socket connection is terminated after an image has been downloaded. 
+--This is because the GET request returns a 'connection closed' field.
+--The VivoTech API explains how to create a persistant tunnel using UART commands which if implemented would increase the image throughput dramatically
+
+-The next step is to remove the header from the buffer and write the remaining data into a file and see if it opens in a image viewer.
+-- If so then we can take the JPEG and grab the RGB values and pump it into our edge detecting software.
+
+Questions concerns please email pnowak5@uic.edu
