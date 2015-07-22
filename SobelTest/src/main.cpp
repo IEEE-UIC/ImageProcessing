@@ -11,20 +11,39 @@ int main(int argc, char *argv[])
 {
 
 
-	BITMAPINFOHEADER bitmapInfoHeader;
-	RGBTRIPLE *pixelmap;
-	RGBTRIPLE **pixelmap2;
-	pixelmap = LoadBitmapFile(argv[1],&bitmapInfoHeader);
-	PrintHeaderInfo(&bitmapInfoHeader);
+	BITMAPINFOHEADER bitmapInfoHeader1;
+	BITMAPINFOHEADER bitmapInfoHeader2;
+	RGBTRIPLE *background_buf;
+	RGBTRIPLE *object_buf;
+
+	RGBTRIPLE **background_map;
+	RGBTRIPLE **object_map;
 
 
-	pixelmap2 = ConvertTo2D(pixelmap);
-	pixelmap2 = ToGrayScale(pixelmap2);
-	//pixelmap2 = DeltaFrameGeneration(pixelmap2,pixelmap2);
+	background_buf = LoadBitmapFile(argv[1],&bitmapInfoHeader1);
+	object_buf 	= LoadBitmapFile(argv[2],&bitmapInfoHeader2);
 
-	sobel_printf(pixelmap2);
+//	PrintHeaderInfo(&bitmapInfoHeader1);
+//	cout<<"__________________________"<<endl;
+//	PrintHeaderInfo(&bitmapInfoHeader2);
 
-	free(pixelmap2);
-	free(pixelmap);
+	background_map = ConvertTo2D(background_buf);
+	background_map = ToGrayScale(background_map);
+
+	object_map = ConvertTo2D(object_buf);
+	object_map = ToGrayScale(object_map);
+
+
+	RGBTRIPLE **delta_frame;
+	//need two gray scale images 1)background 2)object
+	//delta_frame = DeltaFrameGeneration(pixelmap2,pixelmap2);
+
+	//sobel_printf(pixelmap2);
+
+
+	free(background_buf);
+	free(background_map);
+	free(object_buf);
+	free(object_map);
 	return 0;
 }
