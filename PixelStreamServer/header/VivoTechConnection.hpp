@@ -124,7 +124,7 @@ public:
 			{
 				/* Healthy Sleep 4s*/
 
-				sleep(4);
+				sleep(1);
 
 				/*Reset variables*/
 
