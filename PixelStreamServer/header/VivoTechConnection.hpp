@@ -21,6 +21,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "assert.h"
+#include <jpeglib.h>
+
 
 using namespace std;
 using namespace Architecture;
@@ -55,7 +57,20 @@ public:
 	uint8_t raw [60000];
 	size_t raw_size = 60000;
 
+	/*stores the header of the packet*/
+	unsigned char packet_header[148];
+	unsigned char packet_payload[60000];
 
+	/*race condition if we decide to use multiple threads (need to lock)*/
+	unsigned int bytes_read = 0;
+
+
+
+	// Variables for the decompressor itself
+	struct jpeg_decompress_struct cinfo;
+	struct jpeg_error_mgr jerr;
+
+	int row_stride, width, height, pixel_size;
 
 	VivoTechConnection():LPrintData(this){}
 
@@ -85,7 +100,6 @@ public:
 	{
 
 
-		unsigned int bytes_read = 0;
 		int rc = 0;
 		int term_byte;
 
@@ -113,15 +127,32 @@ public:
 			{
 
 				term_byte = bytes_read;
-				raw[bytes_read+1] = '\0';
-
 				bytes_read += rc;
 				cout<<"bytes read: "<< bytes_read <<endl;
+
+
 
 			}
 			cout<<"term byte: "<< term_byte <<" bytes read: "<< bytes_read << endl;
 			if(bytes_read > 1 && (term_byte - bytes_read) == 0)
 			{
+
+				/* Add null terminator for printing */
+				raw[bytes_read+1] = '\0';
+
+				/* Store the header in the buffer
+				 * The first 148 bits are always the header of the packet.*/
+
+				int i;
+				for (i=0; i< 148; i++) {
+					//printf ("%c", (unsigned char) raw [i]);
+					packet_header[i] = (unsigned char)raw[i];
+				}
+				printf ("\n");
+
+				/*Write to file*/
+				JpegToPixels(raw);
+
 				/* Healthy Sleep 4s*/
 
 				sleep(1);
@@ -141,6 +172,7 @@ public:
 				/* Clear the buffer for new data*/
 
 				memset(raw, 0, sizeof(raw));
+				memset(packet_header,0,sizeof(packet_header));
 
 				/*New image, the thread should flow naturally*/
 
@@ -235,6 +267,80 @@ public:
 			std::string s( obj, obj+i );
 			cout<<  s <<endl;
 		}
+
+
+	}
+	inline void WriteToFile(unsigned char* buffer)
+	{
+
+		unsigned int byte_count = bytes_read - 148;
+		unsigned int rc;
+
+		/*maybe do a memcpy to packet_payload eventually*/
+		//memcpy(packet_payload,buffer+148,byte_count);
+
+		FILE *fp;
+		fp=fopen("/cygdrive/c/Users/Peter/git/ImageProcessing/PixelStreamServer/test_me.jpg", "wb");
+		rc = fwrite(buffer+148, sizeof(unsigned char), byte_count, fp);
+		if(rc > 0)
+			cout<<"Number of elements bytes written: "<< rc << endl;
+
+		fclose (fp);
+	}
+	inline void JpegToPixels(unsigned char *buffer)
+	{
+
+		unsigned int byte_count = bytes_read - 148;
+		unsigned int rc = 0;
+
+		unsigned char *raw_image;
+		unsigned long location = 0;
+		JSAMPROW row_pointer[1];
+
+		cinfo.err = jpeg_std_error(&jerr);
+
+
+		jpeg_create_decompress(&cinfo);
+		jpeg_mem_src(&cinfo, buffer+148, bytes_read);
+
+		rc = jpeg_read_header(&cinfo, TRUE);
+
+		if (rc != 1) {
+			cout<<"File does not seem to be a normal JPEG "<< endl;
+		}
+
+
+		jpeg_start_decompress(&cinfo);
+
+		width = cinfo.output_width;
+		height = cinfo.output_height;
+		pixel_size = cinfo.output_components;
+
+		// The row_stride is the total number of bytes it takes to store an entire scanline (row).
+		row_stride = width * pixel_size;
+
+		 raw_image = (unsigned char*)malloc( width*height*pixel_size );
+		 row_pointer[0] = (unsigned char *)malloc( row_stride );
+
+		 while( cinfo.output_scanline < cinfo.image_height )
+		 {
+		  jpeg_read_scanlines( &cinfo, row_pointer, 1 );
+
+		  for( int i = 0; i < row_stride; i++)
+			  raw_image[location++] = row_pointer[0][i];
+
+		 }
+
+		 for(int i=0; i < bytes_read; i++)
+			 printf("0x%3X ", (unsigned int)raw_image[i]);
+
+		jpeg_finish_decompress(&cinfo);
+		jpeg_destroy_decompress(&cinfo);
+		free( row_pointer[0] );
+		free(raw_image);
+
+
+		//return raw_image;
 
 
 	}
