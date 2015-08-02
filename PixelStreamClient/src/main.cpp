@@ -2,6 +2,7 @@
 //The headers
 #include "SDL.h"
 #include "SDL_image.h"
+//#include "SDL_Texture.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -10,8 +11,13 @@
 #include "bmp2rgb.hpp"
 #include <zmq.hpp>
 #include <algorithm>
+#include "MessageCallback.hpp"
+#include "SpinLock.hpp"
+#include "nano_msg.hpp"
+#include "Event.hpp"
+#include <boost/thread/thread.hpp>
 using namespace std;
-
+using namespace nano_message;
 
 
 void dumpMessage(zmq::message_t& msg)
@@ -20,47 +26,159 @@ void dumpMessage(zmq::message_t& msg)
     std::cout << std::endl;
 }
 
+int row_stride = 176 * 3;
+unsigned char image_buff[144 * (176*3)];
+
+int m_LineScanner = 0;
+int m_StrSize = 0;
+unsigned char* m_Native;
+
+//SDL_Texture* mTexture;
+SDL_Surface *screen;
+SDL_Event event;
+
+/* We only need to store one value technically because we are recieving BW pixels ( 1 byte ) */
+RGBTRIPLE *bitmapImage;
+
+nano_msg native_update;
+
+spin_lock MemLock;
+
+bool ImageReady = false;
+
+zmq::message_t message;
+zmq::context_t *context;
+zmq::socket_t *subSocket;
+
+boost::thread *m_ConsumerThread;
+boost::thread *m_ApplicationThread;
+
+MessageCallback *msg;
+
+
+
+
+void RecieveData(){
+
+
+	msg = new MessageCallback();
+
+	context = new zmq::context_t(1);
+	subSocket = new zmq::socket_t(*context, ZMQ_SUB);
+	subSocket->connect("tcp://localhost:5563");
+	subSocket->setsockopt( ZMQ_SUBSCRIBE, "", 0);
+
+
+
+	while(1)
+	{
+
+		subSocket->recv(&message);
+		msg->setFromZMQ(&message);
+
+		nano_msg dat;
+		string data;
+		int size = msg->length;
+		char* check_data = msg->data;
+
+		dat.decode(check_data,size,0,2);
+		dat.getString(2,data);
+
+		m_LineScanner = dat.getInt(1);
+
+		cout<<" Row Count: "<< m_LineScanner << endl;
+
+
+		m_StrSize = strlen(data.c_str());
+
+		m_Native = (unsigned char*)data.c_str();
+
+
+		cout<<"index: "<< ((m_LineScanner-3)*528 ) << endl;
+
+		MemLock.lock();
+
+		memcpy(image_buff+((m_LineScanner-3)*528 ),m_Native,m_StrSize);
+
+
+		cout<<"Mem transfer done... "<<endl;
+
+
+		//    	for(unsigned int i=0; i < str_size; i++)
+		//    		printf("0x%X,", native[i]);
+		//    	printf("\n");
+
+		if(m_LineScanner == 144)
+		{
+			cout<<"Begin RGB Transfer... "<<endl;
+			bitmapImage = (RGBTRIPLE*)malloc(176*144 * sizeof(RGBTRIPLE));
+			int location = 0;
+			for(int i = 0; i < 176*144; i+=3)
+			{
+				bitmapImage[location].rgbtRed = image_buff[i++];
+				bitmapImage[location].rgbtBlue = image_buff[i++];
+				bitmapImage[location].rgbtGreen = image_buff[i++];
+				location++;
+
+			}
+			ImageReady = true;
+		}
+
+		MemLock.unlock();
+
+
+
+	}
+}
+
+void ScreenUpdate(){
+
+	bool quit = false;
+
+
+	while(quit == false)
+	{
+		while( SDL_PollEvent( &event ) )
+		{
+			if( event.type == SDL_QUIT )
+				quit = true;
+		}
+
+		if(ImageReady)
+		{
+			cout<<"Updating Image..."<<endl;
+			buf_display(screen,bitmapImage);
+			SDL_Delay( 2000 );
+			ImageReady = false;
+			free(bitmapImage);
+		}
+
+	}
+
+    	clean_up(screen);
+
+
+}
+
+
 int main( int argc, char* argv[] )
 {
 
 
-	/* We only need to store one value technically because we are recieving BW pixels ( 1 byte ) */
-	RGBTRIPLE **bitmapImage;
-	char *subBuffer;
 
-	unsigned int bytes_read = 0;
+	screen = init();
+	setDimensions(144,176);
 
 
-	zmq::message_t message;
-    zmq::context_t context(1);
-    zmq::socket_t subSocket(context, ZMQ_SUB);
+	m_ConsumerThread = new boost::thread(RecieveData);
+	m_ApplicationThread = new boost::thread(ScreenUpdate);
 
-    subSocket.connect("tcp://localhost:5563");
-    subSocket.setsockopt( ZMQ_SUBSCRIBE, "", 0);
+	while(1){}
 
-	//rc = zmq_connect(frontend, "ipc://cygdrive/c/cygwin/tmp/img_stream/0");
-    //frontend.connect("epgm://239.128.1.99:5561");
-
-    while (1) {
+}
 
 
-    	//  Process all parts of the message
-    	subSocket.recv(&message);
-    	subBuffer = (char *)malloc(message.size());
-    	memcpy(subBuffer,message.data(),message.size());
 
-    	bytes_read += message.size();
-    	/* Idea , incremental update the image ?? that would be sweet. */
-
-    	bitmapImage = (RGBTRIPLE*)malloc(message.size() * sizeof(RGBTRIPLE));
-
-    	for(unsigned int i=0; i < message.size(); i++)
-    		printf("0x%2X ", (unsigned int)subBuffer[i]);
-    	printf("\n");
-
-
-    	free(subBuffer);
-    	free(bitmapImage);
-
-    }
-
+/* For Future Reference	*/
+//rc = zmq_connect(frontend, "ipc://cygdrive/c/cygwin/tmp/img_stream/0");
+//frontend.connect("epgm://239.128.1.99:5561");

@@ -61,7 +61,7 @@ typedef struct tagRGBTRIPLE
     uint8_t  rgbtRed;
     uint8_t  rgbtGreen;
     uint8_t  rgbtBlue;
-    uint8_t  a;
+    //uint8_t  a;
 
 }RGBTRIPLE;
 #pragma pack(pop)
@@ -137,7 +137,7 @@ RGBTRIPLE *LoadBitmapFile(char *filename, BITMAPINFOHEADER *bitmapInfoHeader)
     			color.rgbtRed   = DataStore[CurDataPos++];
     			color.rgbtBlue  = DataStore[CurDataPos++];
     			color.rgbtGreen = DataStore[CurDataPos++];
-    			color.a = 0;
+    			//color.a = 0;
     			bitmapImage[i* bitmapInfoHeader->biWidth +j] = color;
 
     		}

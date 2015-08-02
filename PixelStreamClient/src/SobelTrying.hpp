@@ -35,6 +35,13 @@ void setDimensions(BITMAPINFOHEADER *bitmapInfoHeader)
 	ROWS = bitmapInfoHeader->biWidth;
 	COLS = bitmapInfoHeader->biHeight;
 }
+void setDimensions(int r,int c)
+{
+
+	ROWS = r;
+	COLS = c;
+}
+
 
 inline RGBTRIPLE** alloc2D(int row,int col)
 {

@@ -18,9 +18,9 @@
 using namespace std;
 
 //Screen attributes
-const int SCREEN_WIDTH = 640;
-const int SCREEN_HEIGHT = 480;
-const int SCREEN_BPP = 32;
+const int SCREEN_WIDTH = 176;
+const int SCREEN_HEIGHT = 144;
+const int SCREEN_BPP = 16;
 
 SDL_Surface* init()
 {
@@ -225,8 +225,8 @@ void buf_display(SDL_Surface*& screen,RGBTRIPLE *rgb)
     	for (int j = 0; j < ROWS; j++)
     	{
     		ofs = (i * ROWS) + j;
-    		//color = SDL_MapRGB(screen->format, rgb[i][j].rgbtRed, rgb[i][j].rgbtGreen, rgb[i][j].rgbtBlue);
     		color = SDL_MapRGB(screen->format, rgb[ofs].rgbtRed, rgb[ofs].rgbtGreen, rgb[ofs].rgbtBlue);
+    		//color = SDL_MapRGB(screen->format,0xff, 0xff, 0x00);
 
     		putpixel(screen, i, j, color);
 
