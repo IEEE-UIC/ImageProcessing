@@ -115,11 +115,12 @@ void RecieveData(){
 			int location = 0;
 			for(int i = 0; i < 176*144; i+=3)
 			{
-				bitmapImage[location].rgbtRed = image_buff[i++];
-				bitmapImage[location].rgbtBlue = image_buff[i++];
-				bitmapImage[location].rgbtGreen = image_buff[i++];
-				location++;
-
+    			RGBTRIPLE color;
+    			color.rgbtRed = image_buff[i++];
+    			color.rgbtBlue = image_buff[i++];
+    			color.rgbtGreen = image_buff[i++];
+    			bitmapImage[location] = color;
+    			location++;
 			}
 			ImageReady = true;
 		}
