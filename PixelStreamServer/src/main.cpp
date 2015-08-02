@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include "../header/VivoTechConnection.hpp"
 
-
 using namespace std;
 
 

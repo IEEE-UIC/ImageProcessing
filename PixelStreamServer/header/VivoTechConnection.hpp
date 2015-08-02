@@ -18,6 +18,8 @@
 #include "MessageCallback.hpp"
 #include "SpinLock.hpp"
 #include <boost/thread/thread.hpp>
+#include "nano_msg.hpp"
+
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "assert.h"
@@ -27,6 +29,7 @@
 using namespace std;
 using namespace Architecture;
 using namespace boost::posix_time;
+using namespace nano_message;
 
 class VivoTechConnection
 {
@@ -35,6 +38,9 @@ private:
 	bool m_IsRunning;
 
 	Event<uint8_t*> OnNewData;
+	Event<unsigned char*> OnNewPixels;
+	Event<MessageCallback *> OnEncode;
+
 	boost::thread *m_ApplicationConsumerThread;
 
 	spin_lock m_ParameterLock;
@@ -48,6 +54,21 @@ public:
 
 	void *ctx_t;
 	void *client;
+	void *ipc_socket;
+	void *ipc_ctx;
+
+	zmq::context_t* m_IpcContext;
+	zmq::socket_t* m_IpcSocket;
+
+	zmq::context_t* m_PubContext;
+	zmq::socket_t* m_PubSocket;
+
+
+	char *data_buffer;
+
+	MessageCallback *msg;
+    nano_msg native_update;
+
 
 	int rc;
 	uint8_t id [256];
@@ -72,20 +93,39 @@ public:
 
 	int row_stride, width, height, pixel_size;
 
-	VivoTechConnection():LPrintData(this){}
+	VivoTechConnection():LPrintData(this),LIpcSend(this),LSendNanoMessage(this){
+
+		msg = new MessageCallback();
+
+		//data_buffer = (char*)malloc(4096);
+
+	}
 
 	LISTENER(VivoTechConnection, PrintData, uint8_t*);
+	LISTENER(VivoTechConnection, IpcSend, unsigned char*);
+	LISTENER(VivoTechConnection, SendNanoMessage, MessageCallback*);
 
 
-	~VivoTechConnection(){}
+
+	~VivoTechConnection(){
+
+		delete m_PubSocket;
+		delete m_PubContext;
+		delete msg;
+	}
 
 
 	inline void StreamInit(){
 
 
 		OnNewData += &LPrintData;
+		OnNewPixels += &LIpcSend;
+		OnEncode += &LSendNanoMessage;
 
-
+		/* Open IPC pipe */
+		//IpcInit();
+		/*Open TCP pipe*/
+		PublishInit();
 		/*Initialize and Connect to server*/
 		ZmqConnect();
 		/*Send Packet to server*/
@@ -94,7 +134,35 @@ public:
 		m_ApplicationConsumerThread = new boost::thread(&VivoTechConnection::StartConsumerThread, this);
 
 	}
+	inline void PublishInit()
+	{
 
+		m_PubContext = new zmq::context_t(1);
+		m_PubSocket = new zmq::socket_t(*m_PubContext, ZMQ_PUB);
+		m_PubSocket->bind("tcp://127.0.0.1:5563");
+
+
+
+	}
+	inline void IpcInit()
+	{
+
+		/* Assign the pathname */
+
+		int rc;
+
+
+		ipc_ctx = zmq_ctx_new();
+		assert(ipc_ctx);
+
+		ipc_socket = zmq_socket (ipc_ctx, ZMQ_PUB);
+		assert(ipc_socket);
+
+		rc = zmq_bind(ipc_socket, "ipc:///cygdrive/c/cygwin/tmp/img_stream/0");
+		assert (rc == 0);
+
+
+	}
 
 	inline void StartConsumerThread()
 	{
@@ -151,11 +219,14 @@ public:
 				printf ("\n");
 
 				/*Write to file*/
+				//WriteToFile(raw);
+
+				/* Transform jpeg into RGB */
 				JpegToPixels(raw);
 
-				/* Healthy Sleep 4s*/
+				/* Healthy Sleep 1s*/
 
-				sleep(1);
+				usleep(1000);
 
 				/*Reset variables*/
 
@@ -171,8 +242,8 @@ public:
 
 				/* Clear the buffer for new data*/
 
-				memset(raw, 0, sizeof(raw));
-				memset(packet_header,0,sizeof(packet_header));
+				memset(raw, 0, 60000);
+				memset(packet_header,0,148);
 
 				/*New image, the thread should flow naturally*/
 
@@ -182,6 +253,8 @@ public:
 	}
 	inline void RequestImage()
 	{
+
+
 
 
 		while(!m_IsRunning)
@@ -260,16 +333,27 @@ public:
 
 	inline void PrintData(uint8_t *obj)
 	{
-
 		for(int i = 0; sizeof(obj);i++)
 		{
 
 			std::string s( obj, obj+i );
 			cout<<  s <<endl;
 		}
-
-
 	}
+
+	inline void IpcSend(unsigned char *buffer)
+	{
+
+
+		 std::string buff(buffer, buffer + sizeof(buffer));
+
+		zmq::message_t msg((void*)buff.c_str(),buff.length(),NULL);
+
+		m_PubSocket->send(msg);
+
+		cout<<"Published Data Size: "<< buff.length() << endl;
+	}
+
 	inline void WriteToFile(unsigned char* buffer)
 	{
 
@@ -287,18 +371,26 @@ public:
 
 		fclose (fp);
 	}
+
+	inline void SendNanoMessage(MessageCallback *msg)
+	{
+		zmq::message_t outbound(msg->length);
+		memcpy(outbound.data(),msg->data,msg->length);
+		m_PubSocket->send(outbound,0);
+		cout<<"Published Data Size: "<< msg->length << endl;
+
+	}
+
 	inline void JpegToPixels(unsigned char *buffer)
 	{
 
-		unsigned int byte_count = bytes_read - 148;
 		unsigned int rc = 0;
-
 		unsigned char *raw_image;
-		unsigned long location = 0;
-		JSAMPROW row_pointer[1];
+		unsigned char *row_pointer;
+
+		int mem_counter = 0;
 
 		cinfo.err = jpeg_std_error(&jerr);
-
 
 		jpeg_create_decompress(&cinfo);
 		jpeg_mem_src(&cinfo, buffer+148, bytes_read);
@@ -319,32 +411,107 @@ public:
 		// The row_stride is the total number of bytes it takes to store an entire scanline (row).
 		row_stride = width * pixel_size;
 
-		 raw_image = (unsigned char*)malloc( width*height*pixel_size );
-		 row_pointer[0] = (unsigned char *)malloc( row_stride );
+		/* 3 rows of row_stride size */
+		raw_image = (unsigned char*)malloc( 3 * row_stride);
 
-		 while( cinfo.output_scanline < cinfo.image_height )
-		 {
-		  jpeg_read_scanlines( &cinfo, row_pointer, 1 );
+		/* Make space for the entire image */
+		row_pointer = (unsigned char *)malloc( height * row_stride );
 
-		  for( int i = 0; i < row_stride; i++)
-			  raw_image[location++] = row_pointer[0][i];
-
-		 }
-
-		 for(int i=0; i < bytes_read; i++)
-			 printf("0x%3X ", (unsigned int)raw_image[i]);
-
-		jpeg_finish_decompress(&cinfo);
-		jpeg_destroy_decompress(&cinfo);
-		free( row_pointer[0] );
-		free(raw_image);
+		unsigned char *image_pntr = &raw_image[0];
 
 
-		//return raw_image;
+		/*Buffer to store the nano_msg data*/
+		data_buffer = (char *)malloc(3*row_stride + sizeof(int));
+		/*set the buffer for the nano_msg*/
+		native_update.set_buffer(data_buffer);
 
+		while( cinfo.output_scanline < cinfo.image_height )
+		{
+		    unsigned char *rowp[1];
+		    rowp[0] = row_pointer + row_stride * cinfo.output_scanline;
+
+			jpeg_read_scanlines( &cinfo, rowp, 1 );
+
+			for(int i = 0; i < row_stride; i++) {
+				raw_image[i] = rowp[0][i];
+			}
+
+			cout<<"scan line index: "<< cinfo.output_scanline << endl;
+			if(cinfo.output_scanline % 3 == 0)
+			{
+
+				cout<< &raw_image << endl;
+				string pay_me = reinterpret_cast<char *>(raw_image);
+
+				cout<<"Nano_Msg buffer set "<< endl;
+
+				/* Grab the RawImage[3][3] then encode it to binary
+				 * Then take the Binary convert to MessageCallback
+				 * Take the MessageCallback and convert it into a zmq::message_t */
+
+
+				native_update.reset();
+				native_update.setColumnCount(2);
+				native_update.setInt(1,cinfo.output_scanline);
+				native_update.setString(2,pay_me);
+
+				msg->data = native_update.encode();
+				msg->length = native_update.getSize();
+
+				cout<<"Set Nano Msg and converted to MessageCallback"<<endl;
+				/******************************************************************/
+
+				OnEncode(msg);
+
+
+				//memset(raw_image,0,3*row_stride);
+				memset(data_buffer,0,3 * row_stride + sizeof(int));
+
+
+				raw_image = image_pntr;
+			}
+			else
+				raw_image+=row_stride;
+
+
+//			if(cinfo.output_scanline == height)
+//			{
+				//raw_image+=3*row_stride;
+				//memset(raw_image,0,3*row_stride);
+
+//				cout<<"scanline == height, "<< cinfo.output_scanline <<" === " << height <<endl;
+//				break;
+//			}
+
+
+//			}else{
+//
+//				raw_image+=row_stride;
+//				mem_counter += row_stride;
+//				cout<<"mem_counter: "<< mem_counter <<endl;
+//
+//			}
+
+		}//end while
+
+		  jpeg_finish_decompress(&cinfo);
+		  jpeg_destroy_decompress(&cinfo);
+
+		  free(row_pointer);
+		  free(raw_image);
+		  free(data_buffer);
 
 	}
 
+	void int64ToChar(char a[], int64_t n) {
+	  memcpy(a, &n, 8);
+	}
+
+	int64_t charTo64bitNum(char a[]) {
+	  int64_t n = 0;
+	  memcpy(&n, a, 8);
+	  return n;
+	}
 
 };
 
